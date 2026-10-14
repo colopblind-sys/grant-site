@@ -625,33 +625,23 @@
             line-height: 1.55;
         }
 
-        .result-actions { display: flex; gap: 16px; justify-content: center; margin-top: 10px; }
-/* Таймер актуальности */
-.result-timer {
-    text-align: center;
-    margin-top: 28px;
-    padding-top: 22px;
-    border-top: 1px solid var(--border);
-}
-.result-timer-label {
-    font-size: 11.5px;
-    color: var(--text-muted);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    font-weight: 600;
-    margin-bottom: 8px;
-}
-.result-timer-value {
-    font-size: 26px;
-    font-weight: 800;
-    color: var(--text);
-    letter-spacing: 0.02em;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.2;
-}
-.result-timer-value.warning {
-    color: #dc2626;
-}
+        /* ============ ДЕЙСТВИЯ НА ЭКРАНЕ РЕЗУЛЬТАТА ============ */
+        .result-actions {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            align-items: flex-start;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .confirm-col {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            min-width: 300px;
+        }
+
         .btn-primary {
             padding: 17px 34px;
             background: var(--blue);
@@ -666,6 +656,7 @@
             font-family: inherit;
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 12px;
             transition: all 0.2s;
             box-shadow: 0 8px 20px rgba(37, 99, 235, 0.25);
@@ -685,8 +676,36 @@
             font-family: inherit;
             transition: all 0.2s;
             line-height: 1.4;
+            align-self: flex-start;
         }
         .btn-secondary:hover { background: var(--bg); }
+
+        /* ============ ТАЙМЕР АКТУАЛЬНОСТИ (под кнопкой) ============ */
+        .result-timer {
+            text-align: center;
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 1px dashed rgba(239, 68, 68, 0.4);
+        }
+
+        .result-timer-label {
+            font-size: 11px;
+            color: #dc2626;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-weight: 700;
+            margin-bottom: 6px;
+            line-height: 1.4;
+        }
+
+        .result-timer-value {
+            font-size: 26px;
+            font-weight: 800;
+            color: #dc2626;
+            letter-spacing: 0.04em;
+            font-variant-numeric: tabular-nums;
+            line-height: 1.15;
+        }
 
         /* ============ ЭКРАН "КВОТА ЗАРЕЗЕРВИРОВАНА" ============ */
         .reserve-check {
@@ -869,12 +888,17 @@
             .pill { font-size: 11.5px; padding: 6px 11px; }
 
             .seats-bar { flex-wrap: wrap; padding: 16px 18px; }
+
             .result-actions, .reserve-actions { flex-direction: column; }
             .btn-primary, .btn-secondary { width: 100%; justify-content: center; }
+            .confirm-col { min-width: 100%; }
+            .btn-secondary { align-self: stretch; }
 
             .protocol-grid { grid-template-columns: 1fr; gap: 22px; }
             .protocol-card { padding: 22px 20px; }
             .protocol-footer { flex-direction: column; gap: 8px; }
+
+            .result-timer-value { font-size: 22px; }
         }
     </style>
 </head>
@@ -1113,18 +1137,22 @@
             </div>
 
             <div class="result-actions">
-                <button class="btn-primary" id="confirmBtn">
-                    Зафиксировать условия
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                </button>
+                <div class="confirm-col">
+                    <button class="btn-primary" id="confirmBtn">
+                        Зафиксировать условия
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                    </button>
+
+                    <!-- Таймер актуальности — прямо под кнопкой -->
+                    <div class="result-timer">
+                        <div class="result-timer-label">Актуальность гранта зафиксирована на:</div>
+                        <div class="result-timer-value" id="countdownTimer">20:00</div>
+                    </div>
+                </div>
+
                 <button class="btn-secondary" id="backBtn">← Вернуться к форме</button>
             </div>
         </div>
-        <!-- Таймер актуальности -->
-<div class="result-timer">
-    <div class="result-timer-label">Актуальность гранта зафиксирована на:</div>
-    <div class="result-timer-value" id="countdownTimer">20:00</div>
-</div>
 
         <!-- ============ ЭКРАН 4. КВОТА ЗАРЕЗЕРВИРОВАНА ============ -->
         <div class="card hidden" id="reservedContainer">
@@ -1221,6 +1249,7 @@
 
             let quotaApplied = false;
             let currentPrice = 7500;
+            let countdownInterval = null;
 
             function formatPrice(value) {
                 return value.toLocaleString('ru-RU').replace(/,/g, '\u00A0') + '\u00A0₽';
@@ -1255,6 +1284,45 @@
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }
 
+            /* ---------- ТАЙМЕР ОБРАТНОГО ОТСЧЁТА ---------- */
+            function startCountdown(durationSeconds) {
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+
+                const timerEl = document.getElementById('countdownTimer');
+                let remaining = durationSeconds;
+
+                function tick() {
+                    if (!timerEl) return;
+                    const minutes = Math.floor(remaining / 60);
+                    const seconds = remaining % 60;
+                    const mm = String(minutes).padStart(2, '0');
+                    const ss = String(seconds).padStart(2, '0');
+                    timerEl.textContent = mm + ':' + ss;
+
+                    if (remaining <= 0) {
+                        clearInterval(countdownInterval);
+                        countdownInterval = null;
+                        showScreen('form');
+                        return;
+                    }
+                    remaining--;
+                }
+
+                tick();
+                countdownInterval = setInterval(tick, 1000);
+            }
+
+            function stopCountdown() {
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+            }
+
+            /* ---------- ОТПРАВКА ФОРМЫ ---------- */
             submitBtn.addEventListener('click', function (e) {
                 e.preventDefault();
 
@@ -1293,9 +1361,9 @@
                     quotaBtn.disabled = false;
                     quotaBtn.textContent = 'Применить';
 
-                   showScreen('result');
-startCountdown(20 * 60); // 20 минут = 1200 секунд
-}, 90000);
+                    showScreen('result');
+                    startCountdown(20 * 60); // 20 минут
+                }, 90000); // 1 мин 30 сек
             });
 
             quotaBtn.addEventListener('click', function () {
@@ -1310,66 +1378,16 @@ startCountdown(20 * 60); // 20 минут = 1200 секунд
                 quotaBtn.disabled = true;
             });
 
-            /* ---------- ТАЙМЕР ОБРАТНОГО ОТСЧЁТА ---------- */
-let countdownInterval = null;
+            /* ---------- ВОЗВРАТ К ФОРМЕ ---------- */
+            backBtn.addEventListener('click', function () {
+                stopCountdown();
+                showScreen('form');
+            });
 
-function startCountdown(durationSeconds) {
-    // Останавливаем предыдущий таймер, если был
-    if (countdownInterval) {
-        clearInterval(countdownInterval);
-        countdownInterval = null;
-    }
-
-    const timerEl = document.getElementById('countdownTimer');
-    let remaining = durationSeconds;
-
-    function tick() {
-        if (!timerEl) return;
-
-        const minutes = Math.floor(remaining / 60);
-        const seconds = remaining % 60;
-
-        const mm = String(minutes).padStart(2, '0');
-        const ss = String(seconds).padStart(2, '0');
-        timerEl.textContent = mm + ':' + ss;
-
-        // Красный цвет за последние 60 секунд
-        if (remaining <= 60) {
-            timerEl.classList.add('warning');
-        } else {
-            timerEl.classList.remove('warning');
-        }
-
-        if (remaining <= 0) {
-            clearInterval(countdownInterval);
-            countdownInterval = null;
-            // Автоматический возврат на форму
-            showScreen('form');
-            return;
-        }
-
-        remaining--;
-    }
-
-    tick(); // сразу показать начальное значение
-    countdownInterval = setInterval(tick, 1000);
-}
-
-function stopCountdown() {
-    if (countdownInterval) {
-        clearInterval(countdownInterval);
-        countdownInterval = null;
-    }
-}
-
-/* ---------- ВОЗВРАТ К ФОРМЕ ---------- */
-backBtn.addEventListener('click', function () {
-    stopCountdown();
-    showScreen('form');
-});
-
+            /* ---------- ФИКСАЦИЯ УСЛОВИЙ ---------- */
             confirmBtn.addEventListener('click', function () {
                 stopCountdown();
+
                 const parentSurname = document.getElementById('parentSurname').value.trim();
                 const parentName = document.getElementById('parentName').value.trim();
                 const parentPatronymic = document.getElementById('parentPatronymic').value.trim();
@@ -1406,6 +1424,7 @@ backBtn.addEventListener('click', function () {
                 showScreen('reserved');
             });
 
+            /* ---------- КОПИРОВАНИЕ ---------- */
             document.querySelectorAll('.copyable').forEach(function (el) {
                 el.addEventListener('click', function () {
                     const text = el.textContent;
